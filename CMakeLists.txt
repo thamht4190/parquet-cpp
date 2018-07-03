@@ -164,12 +164,24 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     option(PARQUET_USE_STATIC_CRT
       "Build Parquet with statically linked CRT"
       OFF)
+    option(PARQUET_USE_CLCACHE
+      "Use clcache if available"
+      ON)
   endif()
 
   option(PARQUET_VERBOSE_THIRDPARTY_BUILD
     "If off, output from ExternalProjects will be logged to files rather than shown"
     OFF)
 
+endif()
+
+if (MSVC AND PARQUET_USE_CLCACHE AND
+     (("${CMAKE_GENERATOR}" STREQUAL "NMake Makefiles") OR
+      ("${CMAKE_GENERATOR}" STREQUAL "Ninja")))
+  find_program(CLCACHE_FOUND clcache)
+  if(CLCACHE_FOUND)
+    set(CMAKE_CXX_COMPILER ${CLCACHE_FOUND})
+  endif(CLCACHE_FOUND)
 endif()
 
 include(BuildUtils)
@@ -526,6 +538,15 @@ else()
 endif()
 
 #############################################################
+# OpenSSL
+find_package(OpenSSL REQUIRED)
+message(STATUS "OPENSSL_FOUND ${OPENSSL_FOUND}")
+if(OPENSSL_FOUND)
+set(OPENSSL_USE_STATIC_LIBS TRUE)
+include_directories(${OPENSSL_INCLUDE_DIR})
+endif()
+
+#############################################################
 # Apache Arrow linkage
 
 if ("${PARQUET_ARROW_LINKAGE}" STREQUAL "shared")
@@ -677,6 +698,7 @@ set(LIBPARQUET_SRCS
   src/parquet/types.cc
   src/parquet/util/comparison.cc
   src/parquet/util/memory.cc
+  src/parquet/util/crypto.cc
 )
 
 # # Ensure that thrift compilation is done before using its generated headers
@@ -698,6 +720,10 @@ if (NOT PARQUET_MINIMAL_DEPENDENCY)
 # Although we don't link parquet_objlib against anything, we need it to depend
 # on these libs as we may generate their headers via ExternalProject_Add
   set(PARQUET_DEPENDENCIES ${PARQUET_DEPENDENCIES} ${LIBPARQUET_INTERFACE_LINK_LIBS})
+  set(LIBPARQUET_INTERFACE_LINK_LIBS
+	${OPENSSL_CRYPTO_LIBRARY}
+	${LIBPARQUET_INTERFACE_LINK_LIBS}
+  )
 endif()
 
 if(NOT APPLE AND NOT MSVC)
