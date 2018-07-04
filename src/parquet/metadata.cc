@@ -346,10 +346,10 @@ public:
   FileMetaDataImpl() : metadata_len_(0) {}
 
   explicit FileMetaDataImpl(const uint8_t* metadata, uint32_t* metadata_len, 
-                            EncryptionProperties* encryption = nullptr)
+                            std::shared_ptr<EncryptionProperties> encryption = nullptr)
     : metadata_len_(0) {
     metadata_.reset(new format::FileMetaData);
-    DeserializeThriftMsg(metadata, metadata_len, metadata_.get(), true, encryption);
+    DeserializeThriftMsg(metadata, metadata_len, metadata_.get(), true, encryption.get());
     metadata_len_ = *metadata_len;
 
     if (metadata_->__isset.created_by) {
@@ -444,14 +444,14 @@ private:
 
 std::shared_ptr<FileMetaData> FileMetaData::Make(const uint8_t* metadata,
                                                  uint32_t* metadata_len,
-                                                 EncryptionProperties* encryption) {
+                                                 std::shared_ptr<EncryptionProperties> encryption) {
   // This FileMetaData ctor is private, not compatible with std::make_shared
   return std::shared_ptr<FileMetaData>(new FileMetaData(metadata, metadata_len,
                                                         encryption));
 }
 
 FileMetaData::FileMetaData(const uint8_t* metadata, uint32_t* metadata_len,
-                           EncryptionProperties* encryption)
+                           std::shared_ptr<EncryptionProperties> encryption)
   : impl_{std::unique_ptr<FileMetaDataImpl>(
             new FileMetaDataImpl(metadata, metadata_len, encryption))} {}
 

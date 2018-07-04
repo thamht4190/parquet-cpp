@@ -173,7 +173,7 @@ class PARQUET_EXPORT FileMetaData {
   // API convenience to get a MetaData accessor
   static std::shared_ptr<FileMetaData> Make(const uint8_t* serialized_metadata,
                                             uint32_t* metadata_len,
-                                            EncryptionProperties* encryption = nullptr);
+                                            std::shared_ptr<EncryptionProperties> encryption = nullptr);
 
   ~FileMetaData();
 
@@ -199,7 +199,7 @@ class PARQUET_EXPORT FileMetaData {
  private:
   friend FileMetaDataBuilder;
   explicit FileMetaData(const uint8_t* serialized_metadata, uint32_t* metadata_len,
-                        EncryptionProperties* encryption = nullptr);
+                        std::shared_ptr<EncryptionProperties> encryption = nullptr);
 
   // PIMPL Idiom
   FileMetaData();

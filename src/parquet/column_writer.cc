@@ -248,12 +248,12 @@ class SerializedPageWriter : public PageWriter {
     int data_len = static_cast<int>(compressed_data->size());
 
     std::vector<uint8_t> cdata;
-    if (encryption_.is_encrypted()) {
+    if (encryption_->is_encrypted()) {
         int plen = data_len;
         cdata.resize(plen + 16);
-        int clen = parquet::encrypt(Encryption::AES_GCM_CTR_V1, false,
+        int clen = parquet::encrypt(encryption_->algorithm(), false,
                                     compressed_data->data(), plen,
-                                    encryption_.key_bytes(), encryption_.key_length(),
+                                    encryption_->key_bytes(), encryption_->key_length(),
                                     nullptr, 0, cdata.data());
         data = cdata.data();
         data_len = clen;
@@ -303,7 +303,7 @@ class SerializedPageWriter : public PageWriter {
 };
 
 std::unique_ptr<PageWriter> PageWriter::Open(OutputStream* sink, Compression::type codec,
-                                             EncryptionProperties encryption,
+                                             std::shared_ptr<EncryptionProperties> encryption,
                                              ColumnChunkMetaDataBuilder* metadata,
                                              ::arrow::MemoryPool* pool) {
   return std::unique_ptr<PageWriter>(

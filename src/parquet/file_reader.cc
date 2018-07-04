@@ -127,12 +127,10 @@ class SerializedRowGroup : public RowGroupReader::Contents {
     stream = properties_.GetStream(source_, col_start, col_length);
 
     if (file_crypto_metadata_ && file_crypto_metadata_->encrypted_footer()) {
-      auto file_decryption = properties_->file_decryption();
-
       // get footer key metadata
       std::string footer_key_metadata = file_crypto_metadata_->footer_key_metadata();
       std::string footer_key;
-      auto file_decryption = properties_->file_decryption();
+      auto file_decryption = properties_.file_decryption();
       if (footer_key_metadata.empty()) {
         footer_key = file_decryption->footer_key();
       }
@@ -146,14 +144,13 @@ class SerializedRowGroup : public RowGroupReader::Contents {
           footer_key_metadata,
           file_decryption->aad()
         );
-      
-      }
-      return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
-                              encryption, properties_.memory_pool());
-    }
 
+      return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
+                              footer_encryption, properties_.memory_pool());
+      
+    }
     return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
-                            std::shared_ptr<EncryptionProperties>(), properties_.memory_pool());
+                            nullptr, properties_.memory_pool());
   }
 
  private:
@@ -287,7 +284,7 @@ class SerializedFile : public ParquetFileReader::Contents {
           // get footer key metadata
           std::string footer_key_metadata = file_crypto_metadata_->footer_key_metadata();
           std::string footer_key;
-          auto file_decryption = properties_->file_decryption();
+          auto file_decryption = properties_.file_decryption();
           if (footer_key_metadata.empty()) {
             footer_key = file_decryption->footer_key();
           }
