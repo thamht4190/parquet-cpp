@@ -83,8 +83,10 @@ class PARQUET_EXPORT ColumnEncryptionProperties {
   ColumnEncryptionProperties(bool encrypt, std::vector<std::string> paths)
     : encrypt_(encrypt), paths_(paths), encrypted_with_footer_key_(encrypt) {}
 
-  bool is_encrypted() { return encrypt_; }
+  bool encrypted() { return encrypt_; }
+  bool encrypted_with_footer_key() { return encrypted_with_footer_key_; }
   std::string key() { return key_; }
+  std::string key_metadata() { return key_metadata_; }
 
   void setEncryptionKey(std::string key, uint32_t key_id)
   {
@@ -311,7 +313,7 @@ class PARQUET_EXPORT FileEncryptionProperties {
       if (encrypt_the_rest) throw std::invalid_argument("Encrypt the rest with null footer key");
       bool all_are_unencrypted = true;
       for (auto col = columns.begin(); col != columns.end(); col++) {
-        if (col->is_encrypted()) {
+        if (col->encrypted()) {
           if (col->key().empty()) {
             throw ParquetException("Encrypt column with null footer key");
           }
@@ -335,7 +337,13 @@ class PARQUET_EXPORT FileEncryptionProperties {
     }
   }
 
-  std::shared_ptr<EncryptionProperties> encryption(
+  std::shared_ptr<ColumnEncryptionProperties> encryption(
+                                        const std::shared_ptr<schema::ColumnPath>& path) {
+    // TODO
+    return std::shared_ptr<ColumnEncryptionProperties>(nullptr);
+  }
+
+  std::shared_ptr<EncryptionProperties> encryption_properties(
                                         const std::shared_ptr<schema::ColumnPath>& path) {
     // TODO
     return std::shared_ptr<EncryptionProperties>(nullptr);
@@ -504,7 +512,7 @@ class PARQUET_EXPORT WriterProperties {
       return this;
     }
 
-    Builder* columnEncryption(std::vector<ColumnEncryptionProperties> columns, 
+    Builder* column_encryption(std::vector<ColumnEncryptionProperties> columns,
                               bool encrypt_the_rest) {
       if (file_encryption_.get() == nullptr) 
         throw ParquetException("null file encryption");
@@ -652,9 +660,14 @@ class PARQUET_EXPORT WriterProperties {
     return column_properties(path).max_statistics_size();
   }
 
-  std::shared_ptr<EncryptionProperties> encryption(
+  std::shared_ptr<ColumnEncryptionProperties> encryption(
                                   const std::shared_ptr<schema::ColumnPath>& path) const {
     return parquet_file_encryption_->encryption(path);
+  }
+
+  std::shared_ptr<EncryptionProperties> encryption_properties(
+                                  const std::shared_ptr<schema::ColumnPath>& path) const {
+    return parquet_file_encryption_->encryption_properties(path);
   }
 
  private:

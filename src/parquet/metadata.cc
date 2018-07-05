@@ -203,6 +203,14 @@ public:
     return column_->meta_data.total_uncompressed_size;
   }
 
+//  inline std::unique_ptr<ColumnCryptoMetaData> encryption() const {
+//      if (column_->__isset.crypto_meta_data) {
+//          return std::unique_ptr<ColumnCryptoMetaData>(ColumnCryptoMetaData::Make(
+//                                                            column_->crypto_meta_data
+//                                                           ));
+//      }
+//  }
+
 private:
   mutable std::shared_ptr<RowGroupStatistics> stats_;
   std::vector<Encoding::type> encodings_;
@@ -686,6 +694,15 @@ public:
     column_chunk_->meta_data.__set_path_in_schema(column->path()->ToDotVector());
     column_chunk_->meta_data.__set_codec(
           ToThrift(properties_->compression(column->path())));
+
+    std::shared_ptr<ColumnEncryptionProperties> encryption = props->encryption(column->path());
+    if (encryption != nullptr) {
+        column_chunk_->crypto_meta_data.__set_path_in_schema(column->path()->ToDotVector());
+        column_chunk_->crypto_meta_data.__set_encrypted(encryption->encrypted());
+        column_chunk_->crypto_meta_data.__set_encrypted(encryption->encrypted_with_footer_key());
+        column_chunk_->crypto_meta_data.__set_column_key_metadata(encryption->key_metadata());
+    }
+
   }
   ~ColumnChunkMetaDataBuilderImpl() {}
 
