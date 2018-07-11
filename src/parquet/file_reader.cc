@@ -95,6 +95,8 @@ class SerializedRowGroup : public RowGroupReader::Contents {
       : source_(source), file_metadata_(file_metadata),
         file_crypto_metadata_(file_crypto_metadata), properties_(props) {
     row_group_metadata_ = file_metadata->RowGroup(row_group_number);
+
+//    if (row_group_number == 0) // TODO
   }
 
   const RowGroupMetaData* metadata() const override { return row_group_metadata_.get(); }
@@ -125,30 +127,47 @@ class SerializedRowGroup : public RowGroupReader::Contents {
     }
 
     stream = properties_.GetStream(source_, col_start, col_length);
+    std::unique_ptr<ColumnCryptoMetaData> crypto_meta_data = col->crypto_meta_data();
 
-    if (file_crypto_metadata_ && file_crypto_metadata_->encrypted_footer()) {
-      // get footer key metadata
-      std::string footer_key_metadata = file_crypto_metadata_->footer_key_metadata();
-      std::string footer_key;
-      auto file_decryption = properties_.file_decryption();
-      if (footer_key_metadata.empty()) {
-        footer_key = file_decryption->footer_key();
-      }
-      else {
-        // TODO: get key retriver to get key
-      }
+    // file is encrypted somehow
+    if (file_crypto_metadata_) {
 
-      auto footer_encryption = std::make_shared<EncryptionProperties>(
-          file_crypto_metadata_->encryption_algorithm(),
-          footer_key,
-          footer_key_metadata,
-          file_decryption->aad()
-        );
-
-      return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
-                              footer_encryption, properties_.memory_pool());
-      
+//      if (crypto_meta_data)
     }
+
+    // TODO
+    if (crypto_meta_data->encrypted()) {
+      if (crypto_meta_data->encrypted_with_footer_key()) {
+        if (file_crypto_metadata_) {
+          // get footer key metadata
+          std::string footer_key_metadata = file_crypto_metadata_->footer_key_metadata();
+          std::string footer_key;
+          auto file_decryption = properties_.file_decryption();
+          if (footer_key_metadata.empty()) {
+            footer_key = file_decryption->footer_key();
+          }
+          else {
+            // TODO: get key retriver to get key
+          }
+
+          auto footer_encryption = std::make_shared<EncryptionProperties>(
+              file_crypto_metadata_->encryption_algorithm(),
+              footer_key,
+              footer_key_metadata,
+              file_decryption->aad()
+            );
+
+          return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
+                                  footer_encryption, properties_.memory_pool());
+
+        }
+        else {
+          throw ParquetException("column is encrypted with null footer key");
+        }
+      }
+    }
+
+
     return PageReader::Open(std::move(stream), col->num_values(), col->compression(),
                             nullptr, properties_.memory_pool());
   }

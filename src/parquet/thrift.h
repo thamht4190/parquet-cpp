@@ -149,10 +149,15 @@ inline void DeserializeThriftMsg(const uint8_t* buf, uint32_t* len, T* deseriali
         uint32_t clen = *(reinterpret_cast<uint32_t*>(clenBytes));
 
        // decrypt
-        std::vector<uint8_t> decrypted_buffer(clen);
+        std::vector<uint8_t> decrypted_buffer(clen); // TODO
+        std::vector<uint8_t> key_bytes(encryption->key_length());
+        for (int i = 0; i< encryption->key_length(); i++) {
+          key_bytes.push_back(encryption->key_bytes()[i]);
+        }
+
         int decrypted_buffer_len = parquet::decrypt(
-                Encryption::AES_GCM_V1, isMetadata, &buf[4], clen, // TODO
-                encryption->key_bytes(), encryption->key_length(), nullptr, 0,
+                encryption->algorithm(), isMetadata, &buf[4], clen,
+                key_bytes.data(), encryption->key_length(), nullptr, 0,
                 decrypted_buffer.data());
 
         if (decrypted_buffer_len <= 0) {
@@ -211,9 +216,9 @@ inline int64_t SerializeThriftMsg(T* obj, uint32_t len, OutputStream* out,
     return out_length;
   }
   else {
-    std::vector<uint8_t> cipher_buffer(out_length + 28 + 10);
+    std::vector<uint8_t> cipher_buffer(out_length + 28 + 10);  // TODO
     int cipher_buffer_len = parquet::encrypt(
-                Encryption::AES_GCM_V1, isMetadata, out_buffer, out_length, // TODO
+                encryption->algorithm(), isMetadata, out_buffer, out_length,
                 encryption->key_bytes(), encryption->key_length(), nullptr, 0,
                 cipher_buffer.data());
 

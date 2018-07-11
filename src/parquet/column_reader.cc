@@ -195,7 +195,7 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {
     }
 
     std::vector<uint8_t> ptext;
-    if (encryption_->is_encrypted()) {
+    if (encryption_.get()) {
         int clen = compressed_len;
         ptext.resize(clen);
         int plen = parquet::decrypt(encryption_->algorithm(), false, buffer, clen,

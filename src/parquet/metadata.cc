@@ -91,31 +91,31 @@ std::shared_ptr<RowGroupStatistics> MakeColumnStats(
 // ColumnCryptoMetaData
 class ColumnCryptoMetaData::ColumnCryptoMetaDataImpl {
 public:
-  explicit ColumnCryptoMetaDataImpl(const format::ColumnCryptoMetaData* crypto_metadata) 
+  explicit ColumnCryptoMetaDataImpl(const format::ColumnCryptoMetaData* crypto_metadata)
     : crypto_metadata_(crypto_metadata) {}
 
   ~ColumnCryptoMetaDataImpl() {}
 
-  inline std::vector<std::string> path_in_schema() const { 
+  inline std::vector<std::string> path_in_schema() const {
     return crypto_metadata_->path_in_schema; }
   inline bool encrypted() const { return crypto_metadata_->encrypted; }
-  inline bool encrypted_with_footer_key() const { 
+  inline bool encrypted_with_footer_key() const {
     return crypto_metadata_->encrypted_with_footer_key; }
-  inline std::string column_key_metadata() const { 
+  inline std::string column_key_metadata() const {
     return crypto_metadata_->column_key_metadata; }
 
 private:
-  const format::ColumnCryptoMetaData* crypto_metadata_;  
+  const format::ColumnCryptoMetaData* crypto_metadata_;
 };
 
 std::unique_ptr<ColumnCryptoMetaData> ColumnCryptoMetaData::Make(
-  const uint8_t* metadata) {
+    const uint8_t* metadata) {
   return std::unique_ptr<ColumnCryptoMetaData>(new ColumnCryptoMetaData(metadata));
 }
 
 ColumnCryptoMetaData::ColumnCryptoMetaData(const uint8_t* metadata) 
   : impl_(new ColumnCryptoMetaDataImpl(
-      reinterpret_cast<const format::ColumnCryptoMetaData*>(metadata))) {}
+            reinterpret_cast<const format::ColumnCryptoMetaData*>(metadata))) {}
 
 ColumnCryptoMetaData::~ColumnCryptoMetaData() {}
 
@@ -203,13 +203,15 @@ public:
     return column_->meta_data.total_uncompressed_size;
   }
 
-//  inline std::unique_ptr<ColumnCryptoMetaData> encryption() const {
-//      if (column_->__isset.crypto_meta_data) {
-//          return std::unique_ptr<ColumnCryptoMetaData>(ColumnCryptoMetaData::Make(
-//                                                            column_->crypto_meta_data
-//                                                           ));
-//      }
-//  }
+  inline std::unique_ptr<ColumnCryptoMetaData> crypto_meta_data() const {
+      if (column_->__isset.crypto_meta_data) {
+          return ColumnCryptoMetaData::Make(
+                reinterpret_cast<const uint8_t*>(&column_->crypto_meta_data));
+      }
+      else {
+        return nullptr;
+      }
+  }
 
 private:
   mutable std::shared_ptr<RowGroupStatistics> stats_;
@@ -286,6 +288,10 @@ int64_t ColumnChunkMetaData::total_compressed_size() const {
   return impl_->total_compressed_size();
 }
 
+std::unique_ptr<ColumnCryptoMetaData> ColumnChunkMetaData::crypto_meta_data() const {
+  return impl_->crypto_meta_data();
+}
+
 // row-group metadata
 class RowGroupMetaData::RowGroupMetaDataImpl {
 public:
@@ -353,7 +359,7 @@ class FileMetaData::FileMetaDataImpl {
 public:
   FileMetaDataImpl() : metadata_len_(0) {}
 
-  explicit FileMetaDataImpl(const uint8_t* metadata, uint32_t* metadata_len, 
+  explicit FileMetaDataImpl(const uint8_t* metadata, uint32_t* metadata_len,
                             std::shared_ptr<EncryptionProperties> encryption = nullptr)
     : metadata_len_(0) {
     metadata_.reset(new format::FileMetaData);
@@ -690,19 +696,11 @@ public:
                                           uint8_t* contents)
     : properties_(props), column_(column) {
     column_chunk_ = reinterpret_cast<format::ColumnChunk*>(contents);
-    column_chunk_->meta_data.__set_type(ToThrift(column->physical_type()));
-    column_chunk_->meta_data.__set_path_in_schema(column->path()->ToDotVector());
-    column_chunk_->meta_data.__set_codec(
+    meta_data_ = column_chunk_->meta_data;
+    meta_data_.__set_type(ToThrift(column->physical_type()));
+    meta_data_.__set_path_in_schema(column->path()->ToDotVector());
+    meta_data_.__set_codec(
           ToThrift(properties_->compression(column->path())));
-
-    std::shared_ptr<ColumnEncryptionProperties> encryption = props->encryption(column->path());
-    if (encryption != nullptr) {
-        column_chunk_->crypto_meta_data.__set_path_in_schema(column->path()->ToDotVector());
-        column_chunk_->crypto_meta_data.__set_encrypted(encryption->encrypted());
-        column_chunk_->crypto_meta_data.__set_encrypted(encryption->encrypted_with_footer_key());
-        column_chunk_->crypto_meta_data.__set_column_key_metadata(encryption->key_metadata());
-    }
-
   }
   ~ColumnChunkMetaDataBuilderImpl() {}
 
@@ -729,7 +727,7 @@ public:
       stats.__isset.max = val.has_max;
     }
 
-    column_chunk_->meta_data.__set_statistics(stats);
+    meta_data_.__set_statistics(stats);
   }
 
   void Finish(int64_t num_values, int64_t dictionary_page_offset,
@@ -737,17 +735,17 @@ public:
               int64_t compressed_size, int64_t uncompressed_size, bool has_dictionary,
               bool dictionary_fallback) {
     if (dictionary_page_offset > 0) {
-      column_chunk_->meta_data.__set_dictionary_page_offset(dictionary_page_offset);
+      meta_data_.__set_dictionary_page_offset(dictionary_page_offset);
       column_chunk_->__set_file_offset(dictionary_page_offset + compressed_size);
     } else {
       column_chunk_->__set_file_offset(data_page_offset + compressed_size);
     }
-    column_chunk_->__isset.meta_data = true;
-    column_chunk_->meta_data.__set_num_values(num_values);
-    column_chunk_->meta_data.__set_index_page_offset(index_page_offset);
-    column_chunk_->meta_data.__set_data_page_offset(data_page_offset);
-    column_chunk_->meta_data.__set_total_uncompressed_size(uncompressed_size);
-    column_chunk_->meta_data.__set_total_compressed_size(compressed_size);
+
+    meta_data_.__set_num_values(num_values);
+    meta_data_.__set_index_page_offset(index_page_offset);
+    meta_data_.__set_data_page_offset(data_page_offset);
+    meta_data_.__set_total_uncompressed_size(uncompressed_size);
+    meta_data_.__set_total_compressed_size(compressed_size);
     std::vector<format::Encoding::type> thrift_encodings;
     if (has_dictionary) {
       thrift_encodings.push_back(ToThrift(properties_->dictionary_index_encoding()));
@@ -765,17 +763,59 @@ public:
     if (dictionary_fallback) {
       thrift_encodings.push_back(ToThrift(Encoding::PLAIN));
     }
-    column_chunk_->meta_data.__set_encodings(thrift_encodings);
+    meta_data_.__set_encodings(thrift_encodings);
   }
 
   void WriteTo(OutputStream* sink) {
-    SerializeThriftMsg(column_chunk_, sizeof(format::ColumnChunk), sink);
+    std::cout << "ColumnChunkMetaDataBuilderImpl::WriteTo" << std::endl;
+    auto encrypt_md = properties_->encryption_metadata(column_->path());
+
+    // file is not encrypted or uniform encrypted
+    if (encrypt_md == nullptr) {
+      SerializeThriftMsg(column_chunk_, sizeof(format::ColumnChunk), sink);
+    }
+    else { // file is non-uniform encrypted
+      column_chunk_->__isset.crypto_meta_data = true;
+      column_chunk_->crypto_meta_data.__set_path_in_schema(column_->path()->ToDotVector());
+      column_chunk_->crypto_meta_data.__set_encrypted(encrypt_md->encrypted());
+      column_chunk_->crypto_meta_data.__set_encrypted(encrypt_md->encrypted_with_footer_key());
+      column_chunk_->crypto_meta_data.__set_column_key_metadata(encrypt_md->key_metadata());
+
+      auto footer_encryption = properties_->footer_encryption();
+
+      // non-uniform: footer is unencrypted, or column is encrypted with a column-specific key
+      if ((footer_encryption == nullptr && encrypt_md->encrypted())
+          || (footer_encryption != nullptr
+              && footer_encryption->key() == encrypt_md->key())) {
+        // don't set meta_data,
+        column_chunk_->__isset.meta_data = false;
+
+        // Thrift-serialize the ColumnMetaData structure,
+        // encrypt it with the column key, and write the result to the output stream
+        // (first length, then buffer)
+        auto encrypt_props = properties_->encryption(column_->path());
+        uint64_t metadata_start = sink->Tell();
+
+        SerializeThriftMsg(&meta_data_, sizeof(format::ColumnMetaData), sink, true,
+                           encrypt_props.get());
+
+        // Set the ColumnMetaData offset at the “file_offset” field in the ColumnChunk.
+        column_chunk_->__set_file_offset(metadata_start);
+      }
+      else {
+        column_chunk_->__isset.meta_data = true;
+        column_chunk_->__set_meta_data(meta_data_);
+      }
+
+      SerializeThriftMsg(column_chunk_, sizeof(format::ColumnChunk), sink);
+    }
   }
 
   const ColumnDescriptor* descr() const { return column_; }
 
 private:
   format::ColumnChunk* column_chunk_;
+  format::ColumnMetaData meta_data_;
   const std::shared_ptr<WriterProperties> properties_;
   const ColumnDescriptor* column_;
 };
@@ -1028,8 +1068,8 @@ public:
     // TODO set iv_prefix???
 
     // return as FileCryptoMetaData
-    std::unique_ptr<FileCryptoMetaData> file_crypto_meta_data = 
-      std::unique_ptr<FileCryptoMetaData>(new FileCryptoMetaData());
+    std::unique_ptr<FileCryptoMetaData> file_crypto_meta_data =
+        std::unique_ptr<FileCryptoMetaData>(new FileCryptoMetaData());
     file_crypto_meta_data->impl_->metadata_ = std::move(crypto_metadata_);
     return file_crypto_meta_data;
   }
